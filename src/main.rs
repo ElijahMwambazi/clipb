@@ -80,7 +80,7 @@ fn save_history(history: &Vec<Entry>) {
 
 fn to_list_item(e: &Entry) -> ListItem<'_> {
     let display = if e.content.trim().is_empty() {
-        format!("(whitespace: {:?})", e.content)
+        " ".to_string()
     } else {
         e.content.clone()
     };
