@@ -100,9 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         loop {
             match clipboard.get_text() {
                 Ok(current_text) => {
-                    let is_only_newline = current_text
-                        .chars()
-                        .all(|c| c == '\n' || c == '\r' || c == '\r');
+                    let is_only_newline = current_text.chars().all(|c| c == '\n' || c == '\r');
 
                     if is_only_newline {
                         thread::sleep(Duration::from_millis(config.poll_interval_ms));
@@ -158,12 +156,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let items: Vec<ListItem> = match &input_mode {
                 InputMode::Normal => hist.iter().rev().map(|e| to_list_item(e)).collect(),
 
-                InputMode::Searching(query) => hist
-                    .iter()
-                    .rev()
-                    .filter(|e| e.content.contains(query))
-                    .map(|e| to_list_item(e))
-                    .collect(),
+                InputMode::Searching(query) => {
+                    if query.is_empty() {
+                        Vec::new()
+                    } else {
+                        hist.iter()
+                            .rev()
+                            .filter(|e| e.content.to_lowercase().contains(&query.to_lowercase()))
+                            .map(|e| to_list_item(e))
+                            .collect()
+                    }
+                }
             };
 
             let list = List::new(items)
@@ -175,53 +178,103 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if event::poll(Duration::from_millis(200))? {
             if let CEvent::Key(key) = event::read()? {
-                let len = history.lock().unwrap().len();
-                let mut selected = list_state.selected().unwrap_or(0);
+                match &input_mode {
+                    InputMode::Normal => {
+                        let len = history.lock().unwrap().len();
+                        let mut selected = list_state.selected().unwrap_or(0);
 
-                match input_mode {
-                    InputMode::Normal => match key.code {
-                        KeyCode::Char('q') => break,
-                        KeyCode::Down => {
-                            if selected + 1 < len {
-                                selected += 1;
+                        match key.code {
+                            KeyCode::Char('q') => break,
+                            KeyCode::Down => {
+                                if selected + 1 < len {
+                                    selected += 1;
+                                }
+                                list_state.select(Some(selected));
                             }
-                            list_state.select(Some(selected));
+                            KeyCode::Up => {
+                                if selected > 0 {
+                                    selected -= 1;
+                                }
+                                list_state.select(Some(selected));
+                            }
+                            KeyCode::Enter => {
+                                if let Some(idx) = list_state.selected() {
+                                    if let Some(entry) = history.lock().unwrap().get(len - 1 - idx)
+                                    {
+                                        let mut clipboard = Clipboard::new().unwrap();
+                                        clipboard.set_text(entry.content.clone()).unwrap();
+                                    }
+                                }
+                            }
+                            KeyCode::Char('/') => {
+                                input_mode = InputMode::Searching(String::new());
+                                list_state.select(Some(0));
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+
+                if let InputMode::Searching(query) = &mut input_mode {
+                    match key.code {
+                        KeyCode::Esc => {
+                            input_mode = InputMode::Normal;
+                            list_state.select(Some(0));
+                        }
+                        KeyCode::Enter => {
+                            let hist = history.lock().unwrap();
+                            let filtered: Vec<_> = hist
+                                .iter()
+                                .rev()
+                                .filter(|e| {
+                                    e.content.to_lowercase().contains(&query.to_lowercase())
+                                })
+                                .collect();
+
+                            if let Some(idx) = list_state.selected() {
+                                if let Some(entry) = filtered.get(idx) {
+                                    let mut clipboard = Clipboard::new().unwrap();
+                                    clipboard.set_text(entry.content.clone()).unwrap();
+                                }
+                            }
+
+                            input_mode = InputMode::Normal;
+                            list_state.select(Some(0));
+                        }
+                        KeyCode::Down => {
+                            let hist = history.lock().unwrap();
+                            let filtered_len = hist
+                                .iter()
+                                .filter(|e| {
+                                    e.content.to_lowercase().contains(&query.to_lowercase())
+                                })
+                                .count();
+
+                            if filtered_len > 0 {
+                                let selected = list_state.selected().unwrap_or(0);
+                                if selected + 1 < filtered_len {
+                                    list_state.select(Some(selected + 1));
+                                }
+                            }
                         }
                         KeyCode::Up => {
+                            let mut selected = list_state.selected().unwrap_or(0);
                             if selected > 0 {
                                 selected -= 1;
                             }
                             list_state.select(Some(selected));
                         }
-                        KeyCode::Enter => {
-                            if let Some(idx) = list_state.selected() {
-                                if let Some(entry) = history.lock().unwrap().get(len - 1 - idx) {
-                                    let mut clipboard = Clipboard::new().unwrap();
-                                    clipboard.set_text(entry.content.clone()).unwrap();
-                                }
-                            }
-                        }
-                        KeyCode::Char('/') => {
-                            input_mode = InputMode::Searching(String::new());
-                        }
-                        _ => {}
-                    },
-
-                    InputMode::Searching(ref mut query) => match key.code {
-                        KeyCode::Esc => {
-                            input_mode = InputMode::Normal;
-                        }
-                        KeyCode::Enter => {
-                            input_mode = InputMode::Normal;
-                        }
                         KeyCode::Char(c) => {
                             query.push(c);
+                            list_state.select(Some(0));
                         }
                         KeyCode::Backspace => {
                             query.pop();
+                            list_state.select(Some(0));
                         }
                         _ => {}
-                    },
+                    }
                 }
             }
         }
