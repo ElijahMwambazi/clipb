@@ -35,7 +35,7 @@ Tracks clipboard history, allows navigation in a terminal menu, and preserves wh
 
 ```bash
 git clone https://github.com/ElijahMwambazi/clipb.git
-cd rust-clipboard-manager
+cd clipb
 ```
 
 ### Build
