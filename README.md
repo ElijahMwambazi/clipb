@@ -34,7 +34,7 @@ Tracks clipboard history, allows navigation in a terminal menu, and preserves wh
 ### Clone repository
 
 ```bash
-git clone https://github.com/<your-username>/rust-clipboard-manager.git
+git clone https://github.com/ElijahMwambazi/clipb.git
 cd rust-clipboard-manager
 ```
 
@@ -66,8 +66,8 @@ cargo run
 1. [x] Basic clipboard copy/paste (using `arboard`)
 2. [x] Add clipboard history
 3. [x] Terminal menu for history navigation
-4. [ ] File-based persistence
-5. [ ] Search functionality
+4. [x] File-based persistence
+5. [x] Search functionality
 6. [ ] Configurable hotkeys
 
 ---
